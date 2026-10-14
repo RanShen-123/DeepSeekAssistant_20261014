@@ -1,0 +1,5 @@
+PyQt6>=6.6,<7
+mss>=9,<11
+Pillow>=10,<13
+openai>=1.30,<3
+PyYAML>=6,<7
