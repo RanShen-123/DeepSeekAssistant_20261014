@@ -1,0 +1,4 @@
+# 离线识别实验，独立于第一版运行依赖。
+rapidocr-onnxruntime==1.4.4
+opencv-python>=4.8,<5
+numpy>=1.26,<3

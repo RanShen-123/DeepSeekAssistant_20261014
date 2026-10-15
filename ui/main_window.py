@@ -66,10 +66,16 @@ class MainWindow(QWidget):
 
     region_selection_requested = pyqtSignal()
     recognition_requested = pyqtSignal()
+    auto_start_requested = pyqtSignal()
+    auto_stop_requested = pyqtSignal()
+    auto_retry_requested = pyqtSignal()
+    auto_new_round_requested = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
         self._busy = False
+        self._retry_available = False
+        self._display_question_signature = None
         self.setWindowTitle("DeepSeek AI 助手")
         self.setWindowFlags(
             Qt.WindowType.Window
@@ -120,6 +126,28 @@ class MainWindow(QWidget):
         self.recognize_button.clicked.connect(self._request_recognition)
         layout.addWidget(self.recognize_button)
 
+        auto_row = QHBoxLayout()
+        self.auto_button = QPushButton("开始自动答题")
+        self.auto_button.clicked.connect(lambda: self.auto_start_requested.emit())
+        self.stop_button = QPushButton("停止（Esc）")
+        self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(lambda: self.auto_stop_requested.emit())
+        auto_row.addWidget(self.auto_button)
+        auto_row.addWidget(self.stop_button)
+        layout.addLayout(auto_row)
+        self.retry_button = QPushButton("重新检查并重试本题")
+        self.retry_button.setToolTip("请先手动完成安全核验。本按钮只授权当前待恢复题重新核对后提交一次。")
+        self.retry_button.setEnabled(False)
+        self.retry_button.clicked.connect(lambda: self.auto_retry_requested.emit())
+        layout.addWidget(self.retry_button)
+        self.new_round_button = QPushButton("新一轮答题（清除旧记录）")
+        self.new_round_button.setToolTip("重新开始另一套题或重新作答时使用。清除本地待确认/成功记录并启动；不改变网页记录，不自动处理安全核验。")
+        self.new_round_button.clicked.connect(lambda: self.auto_new_round_requested.emit())
+        layout.addWidget(self.new_round_button)
+        self.auto_info = QLabel("自动模式：单选/判断；已提交且下一题灰色时结束")
+        self.auto_info.setWordWrap(True)
+        layout.addWidget(self.auto_info)
+
         layout.addWidget(QLabel("答案"))
         self.answer_edit = QTextEdit()
         self.answer_edit.setReadOnly(True)
@@ -150,6 +178,9 @@ class MainWindow(QWidget):
         self._busy = busy
         self.region_button.setEnabled(not busy)
         self.recognize_button.setEnabled(not busy)
+        self.auto_button.setEnabled(not busy)
+        self.new_round_button.setEnabled(not busy)
+        self.retry_button.setEnabled(not busy and self._retry_available)
         if busy:
             self.set_status("正在识别，请稍候…")
 
@@ -158,6 +189,27 @@ class MainWindow(QWidget):
 
     def _request_recognition(self) -> None:
         self.recognition_requested.emit()
+
+    def set_auto_running(self, running: bool) -> None:
+        self.set_busy(running)
+        self.stop_button.setEnabled(running)
+
+    def set_retry_available(self, available: bool) -> None:
+        self._retry_available = available
+        self.retry_button.setEnabled(available and not self._busy)
+
+    def show_auto_progress(self, data: dict) -> None:
+        signature = data.get("question_signature")
+        if signature and signature != self._display_question_signature:
+            self.answer_edit.clear()
+            self._display_question_signature = signature
+        kind = {"single": "单选题", "boolean": "判断题"}.get(data.get("question_type"), "待识别")
+        self.auto_info.setText(f"题型：{kind}；本次确认提交：{data['confirmed']}；跳过已提交：{data['skipped']}")
+        self.set_status(data["status"])
+
+    def show_auto_answer(self, data: dict) -> None:
+        answer = {"true": "√（正确）", "false": "×（错误）"}.get(data["answer"][0], data["answer"][0])
+        self.answer_edit.setPlainText(f"AI 答案：{answer}\n\n解析：\n{data['explanation']}")
 
     def closeEvent(self, event) -> None:
         if self._busy:

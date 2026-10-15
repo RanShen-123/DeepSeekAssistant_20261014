@@ -1,0 +1,3 @@
+# 原助手 + 本地视觉；安装不会启动自动任务。
+-r requirements.txt
+-r requirements-vision.txt
